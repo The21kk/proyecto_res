@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import csv
 
 # URL de la página
 url = 'https://www.transporteinforma.cl/'
@@ -15,8 +16,14 @@ if response.status_code == 200:
     # Buscar la sección de "Estado de la movilidad"
     traffic_section = soup.find('section', class_='trafficCondition')
 
-    # Abrir un archivo para escribir la información
-    with open('reportes_trafico.txt', 'w', encoding='utf-8') as file:
+    # Abrir un archivo CSV para escribir la información
+    with open('reportes_trafico.csv', 'w', newline='', encoding='utf-8') as csvfile:
+        # Crear un objeto escritor CSV
+        csv_writer = csv.writer(csvfile)
+        
+        # Escribir el encabezado del CSV
+        csv_writer.writerow(['Fecha', 'Hora', 'Descripción', 'Enlace'])
+        
         if traffic_section:
             # Buscar los artículos dentro de la lista de condiciones de tráfico
             reports = traffic_section.find_all('a', class_='trafficCondition__list__item')
@@ -33,17 +40,16 @@ if response.status_code == 200:
                     descripcion = partes[2].strip()
                     enlace = report['href']
                     
-                    # Escribir en el archivo
-                    file.write(f"Fecha: {fecha}\n")
-                    file.write(f"Hora: {hora}\n")
-                    file.write(f"Descripción: {descripcion}\n")
-                    file.write(f"Enlace: {enlace}\n\n")
+                    # Escribir en el archivo CSV
+                    csv_writer.writerow([fecha, hora, descripcion, enlace])
                 else:
                     # Si no se puede dividir, escribe el texto completo y el enlace
-                    file.write(f"{report.text}\n")
-                    file.write(f"Enlace: {report['href']}\n\n")
+                    csv_writer.writerow([report.text.strip(), '', '', report['href']])
         else:
-            file.write("No se encontró la sección de 'Estado de la movilidad'.\n")
+            # Escribir un mensaje en el CSV si no se encontró la sección
+            csv_writer.writerow(['Error', 'No se encontró la sección de "Estado de la movilidad".', '', ''])
 else:
-    with open('reportes_trafico.txt', 'w', encoding='utf-8') as file:
-        file.write(f"Error al acceder a la página: {response.status_code}\n")
+    with open('reportes_trafico.csv', 'w', newline='', encoding='utf-8') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerow(['Error'])
+        csv_writer.writerow([f"Error al acceder a la página: {response.status_code}"])

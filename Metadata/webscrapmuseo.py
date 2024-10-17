@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import time
 import re
+import csv
 
 def esta_permitido_por_robots(url):
     """
@@ -85,27 +86,6 @@ def obtener_enlaces(url, dominio_base):
         print(f"Error al realizar la solicitud a {url}: {e}")
         return []
 
-def formatear_informacion(contenido):
-    """
-    Formatea el texto extraído para hacerlo más legible, agregando saltos de línea y 
-    separando adecuadamente las palabras clave.
-    """
-    # Insertar saltos de línea donde sea apropiado
-    contenido = re.sub(r'(\w)([A-Z])', r'\1\n\2', contenido)  # Separar palabras juntas
-    contenido = contenido.replace('Dirección', '\nDirección: ')
-    contenido = contenido.replace('Región', '\nRegión: ')
-    contenido = contenido.replace('Horario de visita', '\nHorario de visita: ')
-    contenido = contenido.replace('Valor entrada', '\nValor entrada: ')
-    contenido = contenido.replace('Fechas de cierre', '\nFechas de cierre: ')
-    contenido = contenido.replace('Contactar', '\nContactar: ')
-    contenido = contenido.replace('Teléfono', '\nTeléfono: ')
-    contenido = contenido.replace('Correo electrónico', '\nCorreo electrónico: ')
-    contenido = contenido.replace('Director(a)', '\nDirector(a) o encargado(a): ')
-    contenido = contenido.replace('Seguir e interactuar', '\nSeguir e interactuar: ')
-    contenido = contenido.replace('Otro recurso tecnológico', '\nOtro recurso tecnológico: ')
-    
-    return contenido
-
 def scrape_dominio_interno(url_inicial, profundidad=1):
     dominio_base = urlparse(url_inicial).netloc
     
@@ -140,65 +120,39 @@ def scrape_dominio_interno(url_inicial, profundidad=1):
 
 def guardar_informacion_en_archivo(informacion, nombre_archivo):
     """
-    Guarda la información extraída en un archivo de texto y la muestra en la consola,
-    solo si se ha encontrado contenido en alguno de los divs, y formatea el contenido para mejor legibilidad.
+    Guarda la información extraída en un archivo CSV y la muestra en la consola,
+    solo si se ha encontrado contenido en alguno de los divs.
     """
-    with open(nombre_archivo, 'w', encoding='utf-8') as archivo:
+    with open(nombre_archivo, 'w', newline='', encoding='utf-8') as archivo_csv:
+        # Crear el objeto escritor CSV
+        csv_writer = csv.writer(archivo_csv)
+        
+        # Escribir el encabezado del CSV
+        csv_writer.writerow(['URL', 'Ficha Información', 'Article Título'])
+
         for pagina in informacion:
             # Solo guardamos información si al menos un div tiene contenido
             if pagina['ficha_informacion'] or pagina['article_i__alt2021_arMuseo_Titulo_1']:
-                archivo.write(f"URL: {pagina['url']}\n")
-                archivo.write("="*80 + "\n")
+                # Escribir la fila en el CSV
+                csv_writer.writerow([
+                    pagina['url'], 
+                    pagina['ficha_informacion'] if pagina['ficha_informacion'] else '', 
+                    pagina['article_i__alt2021_arMuseo_Titulo_1'] if pagina['article_i__alt2021_arMuseo_Titulo_1'] else ''
+                ])
                 
-                # Primero mostramos la información del div 'article_i__alt2021_arMuseo_Titulo_1'
-                if pagina['article_i__alt2021_arMuseo_Titulo_1']:
-                    archivo.write("Información del div 'article_i__alt2021_arMuseo_Titulo_1':\n")
-                    contenido_formateado = formatear_informacion(pagina['article_i__alt2021_arMuseo_Titulo_1'])
-                    archivo.write(f"{contenido_formateado}\n")
-                
-                archivo.write("\n")
-                
-                # Luego mostramos la información del div 'ficha_informacion'
-                if pagina['ficha_informacion']:
-                    archivo.write("Información del div 'ficha_informacion':\n")
-                    contenido_formateado = formatear_informacion(pagina['ficha_informacion'])
-                    archivo.write(f"{contenido_formateado}\n")
-                
-                archivo.write("\n" + "="*80 + "\n")
-    
-    # Mostramos la información extraída también en la consola
-    for pagina in informacion:
-        if pagina['ficha_informacion'] or pagina['article_i__alt2021_arMuseo_Titulo_1']:
-            print(f"\nURL: {pagina['url']}")
-            print("="*80)
-            
-            # Primero la información del div 'article_i__alt2021_arMuseo_Titulo_1'
-            if pagina['article_i__alt2021_arMuseo_Titulo_1']:
+                # Mostrar información en la consola
+                print(f"\nURL: {pagina['url']}")
+                print("="*80)
                 print("Información del div 'article_i__alt2021_arMuseo_Titulo_1':")
-                contenido_formateado = formatear_informacion(pagina['article_i__alt2021_arMuseo_Titulo_1'])
-                print(contenido_formateado)
-            
-            print("\n")
-            
-            # Luego la información del div 'ficha_informacion'
-            if pagina['ficha_informacion']:
-                print("Información del div 'ficha_informacion':")
-                contenido_formateado = formatear_informacion(pagina['ficha_informacion'])
-                print(contenido_formateado)
-            
-            print("\n" + "="*80 + "\n")
+                print(pagina['article_i__alt2021_arMuseo_Titulo_1'])
+                print("\nInformación del div 'ficha_informacion':")
+                print(pagina['ficha_informacion'])
+                print("\n" + "="*80 + "\n")
 
 # URL de inicio para el scraping
 url_inicial = "https://www.registromuseoschile.cl/663/w3-channel.html"  # Reemplazar con la URL deseada
 informacion = scrape_dominio_interno(url_inicial, profundidad=3)  # Profundidad para seguir enlaces
 
-# Guardamos la información extraída en un archivo de texto
-nombre_archivo = "informacion_extraida.txt"
+# Guardamos la información extraída en un archivo CSV
+nombre_archivo = "informacion_extraida.csv"
 guardar_informacion_en_archivo(informacion, nombre_archivo)
-
-# Mostramos la información extraída de cada página
-for pagina in informacion:
-    if pagina['ficha_informacion'] or pagina['article_i__alt2021_arMuseo_Titulo_1']:
-        print(f"\nInformación extraída de {pagina['url']}:")
-        print(f"Contenido del div 'article_i__alt2021_arMuseo_Titulo_1': {formatear_informacion(pagina['article_i__alt2021_arMuseo_Titulo_1'])}")
-        print(f"Contenido del div 'ficha_informacion': {formatear_informacion(pagina['ficha_informacion'])}")
