@@ -1,0 +1,2 @@
+bash museos.bash
+bash monumentos.bash
