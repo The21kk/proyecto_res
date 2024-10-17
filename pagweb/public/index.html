@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa del Museo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([-33.4489, -70.6693], 13); // Santiago de Chile
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Función para manejar el clic en los puntos
+        function onEachFeature(feature, layer) {
+            if (feature.properties && feature.properties.nombre) {
+                const lat = layer.getLatLng().lat;
+                const long = layer.getLatLng().long;
+                layer.bindPopup(`Nombre: ${feature.properties.nombre}<br>Latitud: ${lat}<br>Longitud: ${long}`);
+            }
+        }
+
+        // Capa 1
+        fetch('/capa1')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    pointToLayer: function (feature, latlng) {
+                        return L.marker(latlng); // Usar el marcador predeterminado
+                    },
+                    onEachFeature
+                }).addTo(map);
+            });
+
+        // Capa 2
+        fetch('/capa2')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    pointToLayer: function (feature, latlng) {
+                        return L.marker(latlng); // Usar el marcador predeterminado
+                    },
+                    onEachFeature
+                }).addTo(map);
+            });
+    </script>
+</body>
+</html>
