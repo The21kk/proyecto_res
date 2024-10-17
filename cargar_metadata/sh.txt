@@ -1,0 +1,2 @@
+./cargar_monumentos.sh
+./cargar_museos.sh
