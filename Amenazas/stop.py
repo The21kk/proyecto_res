@@ -7,7 +7,7 @@ import geojson
 # URL base del servicio WMS
 wms_url = "https://stop.carabineros.cl/geoserver/stop/wms"
 
-geojson_path = '../Metadata/obtener_metadata/monumentos_nacionales.geojson'
+geojson_path = '../Metadata/museos.geojson'
 
 # Leer el archivo GeoJSON
 with open(geojson_path, 'r', encoding='utf-8') as f:
@@ -96,4 +96,5 @@ with open('robos.csv', mode='w', newline='') as file:
                 robos = feature_info["features"][0]["properties"].get("robos", "N/A")
                 writer.writerow([Latitud, Longitud, json.dumps(robos)])
             elif feature_info and "totalFeatures" in feature_info and feature_info["totalFeatures"] == 'unknown':
-                writer.writerow([Latitud, Longitud, "0"])
+                writer.writerow([Latitud, Longitud, "0"])
+
