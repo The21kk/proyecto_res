@@ -31,7 +31,7 @@ if response.status_code == 200:
             # Extraer y guardar la información de los reportes
             for report in reports:
                 # Dividir el texto del reporte
-                partes = report.text.split(" - ")
+                partes = report.text.split("-")
                 
                 # Comprobar si la división contiene al menos tres partes
                 if len(partes) >= 3:
