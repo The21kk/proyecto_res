@@ -5,6 +5,7 @@ DOWNLOADS_DIR="$HOME/Downloads"
 AMENAZAS_DIR="$DOWNLOADS_DIR/amenazas"
 METADATA_DIR="$DOWNLOADS_DIR/Metadata"
 INFRAESTRUCTURA_DIR="$DOWNLOADS_DIR/infrastructure"
+BD_SCRIPT="$DOWNLOADS_DIR/bdd.sql"  # Ruta al archivo bdd.sql
 
 # Ejecutar scripts en la carpeta 'amenazas'
 if [ -d "$AMENAZAS_DIR" ]; then
@@ -55,6 +56,14 @@ if [ -d "$INFRAESTRUCTURA_DIR" ]; then
     done
 else
     echo "La carpeta 'infraestructura' no existe en $DOWNLOADS_DIR."
+fi
+
+# Ejecutar el script SQL para inicializar la base de datos
+if [ -f "$BD_SCRIPT" ]; then
+    echo "Ejecutando el script de inicialización de la base de datos bdd.sql..."
+    psql -U postgres -f "$BD_SCRIPT"
+else
+    echo "El archivo bdd.sql no se encontró en $DOWNLOADS_DIR."
 fi
 
 echo "Ejecución de scripts finalizada."
