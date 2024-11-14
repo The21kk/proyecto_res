@@ -29,11 +29,32 @@
         <label for="endPoint">Punto Final:</label>
         <select id="endPoint"></select>
 
+        <!-- Campo para ingresar dirección alternativa si no se permite geolocalización -->
+        <input type="text" id="manualAddress" placeholder="Dirección de inicio alternativa" style="display: none;">
+
+        <!-- Filtros de metadata adicionales -->
+        <fieldset>
+            <legend>Filtros de Metadata</legend>
+            
+            <!-- Tipo de Institución -->
+            <label for="tipoInstSelect">Tipo de Institución:</label>
+            <select id="tipoInstSelect" onchange="filterByMetadata()">
+                <option value="">Todos</option>
+                <option value="Museo">Museo</option>
+                <option value="Centro Cultural">Centro Cultural</option>
+            </select>
+
+            <!-- Filtros de Atributos Booleanos -->
+            <label><input type="checkbox" id="arteFilter" onchange="filterByMetadata()"> Arte</label>
+            <label><input type="checkbox" id="historiaFilter" onchange="filterByMetadata()"> Historia</label>
+            <label><input type="checkbox" id="cobroFilter" onchange="filterByMetadata()"> Entrada Gratuita</label>
+        </fieldset>
+
         <button onclick="calculateRoute()">Calcular Ruta</button>
     </div>
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+    <script src="https://unpkg.com/leaflet-pip@1.1.0/leaflet-pip.min.js"></script>
     <script>
         const map = L.map('map').setView([-33.4489, -70.6693], 13); // Santiago de Chile
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
@@ -84,41 +105,44 @@
 
             // Si no hay una comuna seleccionada, cargar todos los puntos de ambas capas
             if (!selectedComuna) {
-                loadPoints('/capa1', 'blue', 'start');
-                loadPoints('/capa2', 'red', 'end');
+                loadPoints('/capa1', 'blue', 'start');  // Museos
+                loadPoints('/capa2', 'red', 'end');     // Monumentos
                 return;
             }
 
-            // Filtrar los puntos dentro de la comuna seleccionada
-            fetch(`/comunas`)
-                .then(response => response.json())
-                .then(data => {
-                    const comuna = data.features.find(
-                        feature => feature.properties.Comuna === selectedComuna
-                    );
+            // Encontrar la capa de la comuna seleccionada y crear un GeoJSON compatible
+            const selectedFeature = comunaLayer.getLayers().find(layer => 
+                layer.feature.properties.Comuna === selectedComuna
+            );
 
-                    if (comuna) {
-                        // Limitar la visualización a los puntos dentro de la comuna seleccionada
-                        loadPoints('/capa1', 'blue', 'start', comuna);
-                        loadPoints('/capa2', 'red', 'end', comuna);
-                    }
-                });
+            if (selectedFeature) {
+                const selectedLayer = L.geoJSON(selectedFeature.toGeoJSON());
+                loadPoints('/capa1', 'blue', 'start', selectedLayer);
+                loadPoints('/capa2', 'red', 'end', selectedLayer);
+            }
         }
 
-        // Cargar puntos desde una capa y agregar solo los que están dentro de la comuna seleccionada
-        function loadPoints(url, color, type, comuna = null) {
+        // Cargar puntos desde una capa y ajustar para soportar MultiPoint
+        function loadPoints(url, color, type, selectedLayer = null) {
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     const layer = L.geoJSON(data, {
                         pointToLayer: function (feature, latlng) {
-                            if (comuna) {
-                                // Verificar si el punto está dentro de la comuna seleccionada
-                                const withinComuna = turf.booleanPointInPolygon(
-                                    turf.point([latlng.lng, latlng.lat]),
-                                    comuna
-                                );
-                                if (!withinComuna) return null; // Si no está, no agregar al mapa
+                            // Aplicar filtros de metadata
+                            if (!passesMetadataFilters(feature.properties)) return null;
+
+                            // Si la geometría es MultiPoint, extraer el primer punto
+                            const geometry = feature.geometry;
+                            if (geometry.type === "MultiPoint" && geometry.coordinates.length > 0) {
+                                const [lng, lat] = geometry.coordinates[0];
+                                latlng = L.latLng(lat, lng);
+                            }
+
+                            // Si hay una comuna seleccionada, verificar si el punto está dentro
+                            if (selectedLayer) {
+                                const isWithin = leafletPip.pointInLayer([latlng.lng, latlng.lat], selectedLayer);
+                                if (isWithin.length === 0) return null;
                             }
 
                             // Agregar punto de interés y marcar en el selector
@@ -136,40 +160,93 @@
 
                     // Agregar capa de puntos a la lista de capas
                     pointLayers.push(layer);
-                });
+                })
+                .catch(error => console.error(`Error al cargar puntos de ${url}:`, error));
         }
 
         // Cargar todos los puntos al inicio
         loadPoints('/capa1', 'blue', 'start'); // Museos
         loadPoints('/capa2', 'red', 'end'); // Monumentos
 
-        // Seleccionar punto al hacer clic en el mapa
-        function selectPoint(name, type) {
-            if (type === 'start') startSelect.value = name;
-            if (type === 'end') endSelect.value = name;
+        // Función para capturar la geolocalización o habilitar el campo manual
+        function captureUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const userLat = position.coords.latitude;
+                        const userLng = position.coords.longitude;
+                        const userLocation = L.latLng(userLat, userLng);
+
+                        // Agrega la ubicación del usuario al selector de inicio
+                        addPointToSelector("Ubicación Actual", userLocation);
+                        map.setView(userLocation, 13);
+
+                        startSelect.value = "Ubicación Actual";
+                    },
+                    () => {
+                        document.getElementById("manualAddress").style.display = "block";
+                    }
+                );
+            } else {
+                document.getElementById("manualAddress").style.display = "block";
+            }
+        }
+
+        // Llama a la función de captura al cargar la página
+        window.onload = captureUserLocation;
+
+        // Función para verificar si un museo cumple con los filtros de metadata
+        function passesMetadataFilters(properties) {
+            const tipoInst = document.getElementById("tipoInstSelect").value;
+            const arteFilter = document.getElementById("arteFilter").checked;
+            const historiaFilter = document.getElementById("historiaFilter").checked;
+            const cobroFilter = document.getElementById("cobroFilter").checked;
+
+            if (tipoInst && properties.tipo_inst !== tipoInst) return false;
+            if (arteFilter && properties.arte !== "Sí") return false;
+            if (historiaFilter && properties.historia !== "Sí") return false;
+            if (cobroFilter && properties.cobro_ent !== "Ingreso gratuito") return false;
+
+            return true;
+        }
+
+        // Función para aplicar filtros de metadata
+        function filterByMetadata() {
+            pointLayers.forEach(layer => map.removeLayer(layer));
+            pointLayers.length = 0;
+
+            loadPoints('/capa1', 'blue', 'start');
+            loadPoints('/capa2', 'red', 'end');
         }
 
         // Función para calcular la ruta
         function calculateRoute() {
             const startName = startSelect.value;
             const endName = endSelect.value;
+            const manualAddress = document.getElementById("manualAddress").value;
+
+            if (manualAddress && !startName) {
+                geocodeAddress(manualAddress, coords => {
+                    addPointToSelector("Inicio Manual", coords);
+                    startSelect.value = "Inicio Manual";
+                    calculateRoute();
+                });
+                return;
+            }
 
             if (startName && endName && points[startName] && points[endName]) {
                 const start = points[startName];
                 const end = points[endName];
 
-                // Actualizar los marcadores de inicio y fin en el mapa
                 if (startMarker) startMarker.remove();
                 if (endMarker) endMarker.remove();
                 startMarker = L.marker(start).addTo(map).bindPopup(`Inicio: ${startName}`).openPopup();
                 endMarker = L.marker(end).addTo(map).bindPopup(`Fin: ${endName}`).openPopup();
 
-                // Obtener la ruta de OSRM
                 fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`)
                     .then(response => response.json())
                     .then(data => {
                         const route = data.routes[0].geometry;
-                        // Eliminar la ruta anterior si existe
                         if (window.routeLayer) map.removeLayer(window.routeLayer);
                         window.routeLayer = L.geoJSON(route, {
                             style: { color: 'green', weight: 4, opacity: 0.7 }
@@ -179,6 +256,22 @@
             } else {
                 alert('Por favor, selecciona puntos de inicio y fin válidos.');
             }
+        }
+
+        // Función de geocodificación para convertir la dirección en coordenadas
+        function geocodeAddress(address, callback) {
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${address}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const lat = data[0].lat;
+                        const lng = data[0].lon;
+                        callback(L.latLng(lat, lng));
+                    } else {
+                        alert("Dirección no encontrada");
+                    }
+                })
+                .catch(error => console.error('Error al geocodificar la dirección:', error));
         }
     </script>
 </body>

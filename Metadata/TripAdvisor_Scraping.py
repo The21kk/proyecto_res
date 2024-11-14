@@ -33,33 +33,39 @@ def get_museums_ratings_reviews_from_page(soup):
         cleaned_name = re.sub(r'^\d+\.\s*', '', name.text.strip())
         museums.append(cleaned_name)
 
-    # Obtener ratings de los museos y convertirlos a valores numéricos
+    # Obtener ratings de los museos
     for rating_div in soup.find_all('div', class_='jVDab W f u w JqMhy'):
         rating_svg = rating_div.find('svg', class_='UctUV d H0 hzzSG')
         if rating_svg:
-            try:
-                rating_text = rating_svg.text.strip()
-                rating_numeric = float(rating_text)
-                ratings.append(rating_numeric)
-            except ValueError:
-                ratings.append(None)  # Si no es un número válido, usa None
+            # Obtener solo el número antes de 'de'
+            rating_text = rating_svg.text.strip()
+            rating_number = re.search(r'(\d+[\.,]?\d*)', rating_text)  # Buscar el número de la calificación
+            if rating_number:
+                ratings.append(rating_number.group(1))  # Extraer solo el número
+            else:
+                ratings.append("Sin valoración")
         else:
-            ratings.append(None)  # Para casos sin rating
+            ratings.append("Sin valoración")
     
-    # Obtener número de reviews de los museos, guardando el texto completo
+    # Obtener número de reviews de los museos y convertirlos a enteros sin punto ni coma
     for review_span in soup.find_all('span', class_='biGQs _P pZUbB osNWb'):
         if review_span:
             review_text = review_span.text.strip()
-            reviews.append(review_text)  # Guardar el texto sin convertirlo
+            review_text = review_text.replace(".", "").replace(",", "")  # Eliminar puntos y comas
+            try:
+                # Convertir a entero después de eliminar el punto y coma
+                reviews.append(int(review_text))
+            except ValueError:
+                reviews.append(None)  # Si no es un número válido, agregar None
         else:
-            reviews.append("Sin reviews")
+            reviews.append(None)  # Si no hay número de reviews, usar None
     
     # Asegurarse de que las listas tengan la misma longitud
     while len(ratings) < len(museums):
-        ratings.append(None)
+        ratings.append("Sin valoración")
     
     while len(reviews) < len(museums):
-        reviews.append("Sin reviews")
+        reviews.append(None)
     
     return museums, ratings, reviews
 
