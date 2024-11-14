@@ -18,7 +18,13 @@ app.get('/capa2', (req, res) => {
     res.sendFile(path.join(__dirname, 'data', 'capa2.geojson'));
 });
 
+// Ruta para el archivo GeoJSON de comunas
+app.get('/comunas', (req, res) => {
+    res.sendFile(path.join(__dirname, 'data', '13.geojson'));
+});
+
 // Inicia el servidor
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
+

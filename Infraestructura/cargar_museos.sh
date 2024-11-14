@@ -4,7 +4,7 @@
 DB_NAME="museos_db"             # Nombre de la base de datos
 DB_USER="boris"                     # Usuario de PostgreSQL
 DB_PASSWORD="2569"  # Contraseña del usuario
-GEOJSON_PATH="$HOME/Desktop/U/proyecto_res/Metadata/obtener_metadata/museos.geojson"  # Ruta del archivo GeoJSON
+GEOJSON_PATH="/home/nicolas/Desktop/U/proyecto_res/Metadata/museos.geojson"  # Ruta del archivo GeoJSON
 DB_TABLE="museos"               # Nombre de la tabla para cargar los datos
 
 # Verificar si el archivo GeoJSON existe

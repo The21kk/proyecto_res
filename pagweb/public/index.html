@@ -3,56 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapa del Museo</title>
+    <title>Mapa Interactivo del Museo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map {
-            height: 100vh;
+            height: 90vh;
+            width: 100%;
+        }
+        #controls {
+            margin: 10px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
+    <div id="controls">
+        <label for="comunaSelect">Filtrar por Comuna:</label>
+        <select id="comunaSelect" onchange="filterByComuna()">
+            <option value="">Todas</option>
+        </select>
+
+        <label for="startPoint">Punto de Inicio:</label>
+        <select id="startPoint"></select>
+
+        <label for="endPoint">Punto Final:</label>
+        <select id="endPoint"></select>
+
+        <button onclick="calculateRoute()">Calcular Ruta</button>
+    </div>
     <div id="map"></div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <script>
         const map = L.map('map').setView([-33.4489, -70.6693], 13); // Santiago de Chile
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-        }).addTo(map);
+        let startMarker, endMarker;
+        let comunaLayer; // Capa para todas las comunas
+        const startSelect = document.getElementById('startPoint');
+        const endSelect = document.getElementById('endPoint');
+        const points = {}; // Almacena los puntos de cada capa por nombre
+        const pointLayers = []; // Almacena las capas de puntos de interés para manipularlas
 
-        // Función para manejar el clic en los puntos
-        function onEachFeature(feature, layer) {
-            if (feature.properties && feature.properties.nombre) {
-                const lat = layer.getLatLng().lat;
-                const long = layer.getLatLng().long;
-                layer.bindPopup(`Nombre: ${feature.properties.nombre}<br>Latitud: ${lat}<br>Longitud: ${long}`);
-            }
+        // Función para agregar los puntos a los selectores
+        function addPointToSelector(name, latlng) {
+            points[name] = latlng;
+            const optionStart = new Option(name, name);
+            const optionEnd = new Option(name, name);
+            startSelect.add(optionStart);
+            endSelect.add(optionEnd);
         }
 
-        // Capa 1
-        fetch('/capa1')
+        // Cargar capa de comunas y agregar al selector de filtro
+        fetch('/comunas')
             .then(response => response.json())
             .then(data => {
-                L.geoJSON(data, {
-                    pointToLayer: function (feature, latlng) {
-                        return L.marker(latlng); // Usar el marcador predeterminado
-                    },
-                    onEachFeature
-                }).addTo(map);
-            });
+                comunaLayer = L.geoJSON(data, {
+                    style: { color: 'blue', weight: 1, fillOpacity: 0.1 },
+                    onEachFeature: function (feature, layer) {
+                        if (feature.properties && feature.properties.Comuna) {
+                            const comunaName = feature.properties.Comuna;
+                            layer.bindPopup(comunaName);
 
-        // Capa 2
-        fetch('/capa2')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    pointToLayer: function (feature, latlng) {
-                        return L.marker(latlng); // Usar el marcador predeterminado
-                    },
-                    onEachFeature
+                            // Agregar opción de comuna al selector
+                            const option = new Option(comunaName, comunaName);
+                            document.getElementById('comunaSelect').add(option);
+                        }
+                    }
                 }).addTo(map);
-            });
+            })
+            .catch(error => console.error('Error al cargar el GeoJSON de comunas:', error));
+
+        // Función para filtrar puntos por comuna seleccionada
+        function filterByComuna() {
+            const selectedComuna = document.getElementById('comunaSelect').value;
+
+            // Eliminar los puntos de interés actuales del mapa
+            pointLayers.forEach(layer => map.removeLayer(layer));
+            pointLayers.length = 0;  // Limpiar la lista de capas de puntos
+
+            // Si no hay una comuna seleccionada, cargar todos los puntos de ambas capas
+            if (!selectedComuna) {
+                loadPoints('/capa1', 'blue', 'start');
+                loadPoints('/capa2', 'red', 'end');
+                return;
+            }
+
+            // Filtrar los puntos dentro de la comuna seleccionada
+            fetch(`/comunas`)
+                .then(response => response.json())
+                .then(data => {
+                    const comuna = data.features.find(
+                        feature => feature.properties.Comuna === selectedComuna
+                    );
+
+                    if (comuna) {
+                        // Limitar la visualización a los puntos dentro de la comuna seleccionada
+                        loadPoints('/capa1', 'blue', 'start', comuna);
+                        loadPoints('/capa2', 'red', 'end', comuna);
+                    }
+                });
+        }
+
+        // Cargar puntos desde una capa y agregar solo los que están dentro de la comuna seleccionada
+        function loadPoints(url, color, type, comuna = null) {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const layer = L.geoJSON(data, {
+                        pointToLayer: function (feature, latlng) {
+                            if (comuna) {
+                                // Verificar si el punto está dentro de la comuna seleccionada
+                                const withinComuna = turf.booleanPointInPolygon(
+                                    turf.point([latlng.lng, latlng.lat]),
+                                    comuna
+                                );
+                                if (!withinComuna) return null; // Si no está, no agregar al mapa
+                            }
+
+                            // Agregar punto de interés y marcar en el selector
+                            if (feature.properties && feature.properties.nombre) {
+                                addPointToSelector(feature.properties.nombre, latlng);
+                            }
+                            return L.circleMarker(latlng, {
+                                radius: 8,
+                                color: color,
+                                fillColor: color,
+                                fillOpacity: 0.5
+                            }).on('click', () => selectPoint(feature.properties.nombre, type));
+                        }
+                    }).addTo(map);
+
+                    // Agregar capa de puntos a la lista de capas
+                    pointLayers.push(layer);
+                });
+        }
+
+        // Cargar todos los puntos al inicio
+        loadPoints('/capa1', 'blue', 'start'); // Museos
+        loadPoints('/capa2', 'red', 'end'); // Monumentos
+
+        // Seleccionar punto al hacer clic en el mapa
+        function selectPoint(name, type) {
+            if (type === 'start') startSelect.value = name;
+            if (type === 'end') endSelect.value = name;
+        }
+
+        // Función para calcular la ruta
+        function calculateRoute() {
+            const startName = startSelect.value;
+            const endName = endSelect.value;
+
+            if (startName && endName && points[startName] && points[endName]) {
+                const start = points[startName];
+                const end = points[endName];
+
+                // Actualizar los marcadores de inicio y fin en el mapa
+                if (startMarker) startMarker.remove();
+                if (endMarker) endMarker.remove();
+                startMarker = L.marker(start).addTo(map).bindPopup(`Inicio: ${startName}`).openPopup();
+                endMarker = L.marker(end).addTo(map).bindPopup(`Fin: ${endName}`).openPopup();
+
+                // Obtener la ruta de OSRM
+                fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const route = data.routes[0].geometry;
+                        // Eliminar la ruta anterior si existe
+                        if (window.routeLayer) map.removeLayer(window.routeLayer);
+                        window.routeLayer = L.geoJSON(route, {
+                            style: { color: 'green', weight: 4, opacity: 0.7 }
+                        }).addTo(map);
+                    })
+                    .catch(error => console.error('Error al obtener la ruta:', error));
+            } else {
+                alert('Por favor, selecciona puntos de inicio y fin válidos.');
+            }
+        }
     </script>
 </body>
 </html>

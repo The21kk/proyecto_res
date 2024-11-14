@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import csv
+from datetime import datetime  # Importamos datetime para manipular la fecha
 
 # URL de la página
 url = 'https://www.transporteinforma.cl/'
@@ -40,8 +41,16 @@ if response.status_code == 200:
                     descripcion = partes[2].strip()
                     enlace = report['href']
                     
+                    # Convertir la fecha al formato YYYY-MM-DD compatible con PostgreSQL
+                    try:
+                        # Reemplazamos los puntos medianos por barras para el procesamiento
+                        fecha = fecha.replace(" · ", "/")
+                        fecha_formateada = datetime.strptime(fecha, '%d/%m/%Y').strftime('%Y-%m-%d')
+                    except ValueError:
+                        fecha_formateada = fecha  # Mantener original si el formato no es compatible
+                    
                     # Escribir en el archivo CSV
-                    csv_writer.writerow([fecha, hora, descripcion, enlace])
+                    csv_writer.writerow([fecha_formateada, hora, descripcion, enlace])
                 else:
                     # Si no se puede dividir, escribe el texto completo y el enlace
                     csv_writer.writerow([report.text.strip(), '', '', report['href']])

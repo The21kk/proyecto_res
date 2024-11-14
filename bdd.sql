@@ -1,23 +1,21 @@
 -- Conectarse al servidor PostgreSQL y crear las bases de datos
 
 -- Crear la base de datos museos_db
-CREATE DATABASE museos_db OWNER postgres;
+CREATE DATABASE museos_db OWNER boris;
 
 -- Crear la base de datos monumentos_db
-CREATE DATABASE monumentos_db OWNER postgres;
+CREATE DATABASE monumentos_db OWNER boris;
 
 -- Crear la base de datos edges_SQL
-CREATE DATABASE edges_SQL OWNER postgres;
+CREATE DATABASE edges_SQL OWNER boris;
 
--- Conceder privilegios al usuario postgres
-GRANT ALL PRIVILEGES ON DATABASE museos_db TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE monumentos_db TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE edges_SQL TO postgres;
+-- Conceder privilegios al usuario boris en las bases de datos existentes
+GRANT ALL PRIVILEGES ON DATABASE museos_db TO boris;
+GRANT ALL PRIVILEGES ON DATABASE monumentos_db TO boris;
+GRANT ALL PRIVILEGES ON DATABASE edges_sql TO boris;
 
--- Crear la tabla Edges_SQL en edges_SQL
-\c edges_SQL;  -- Cambiar a la base de datos edges_SQL
-
-CREATE TABLE Edges_SQL (
+-- Crear la tabla Edges_SQL en edges_sql si no existe
+CREATE TABLE IF NOT EXISTS Edges_SQL (
     id SERIAL PRIMARY KEY,
     source_id INT NOT NULL,
     target_id INT NOT NULL,
@@ -25,5 +23,68 @@ CREATE TABLE Edges_SQL (
     description TEXT
 );
 
--- Mensaje de éxito
-RAISE NOTICE 'Las bases de datos museos_db, monumentos_db y edges_SQL han sido creadas exitosamente, junto con la tabla Edges_SQL.';
+-- Crear la base de datos 'metadatos'
+CREATE DATABASE metadatos OWNER boris;
+GRANT ALL PRIVILEGES ON DATABASE metadatos TO boris;
+
+-- Conectarse a la base de datos 'metadatos' para crear las tablas
+\c metadatos
+
+-- Crear la tabla 'robos'
+CREATE TABLE IF NOT EXISTS robos (
+    id SERIAL PRIMARY KEY,
+    lat FLOAT NOT NULL,
+    lon FLOAT NOT NULL,
+    robos INT
+);
+
+-- Crear la tabla 'reportes_trafico'
+CREATE TABLE IF NOT EXISTS reportes_trafico (
+    id SERIAL PRIMARY KEY,
+    fecha DATE NOT NULL,
+    hora TIME,
+    descripcion TEXT,
+    enlace TEXT
+);
+
+-- Crear la tabla 'estado_metro'
+CREATE TABLE IF NOT EXISTS estado_metro (
+    id SERIAL PRIMARY KEY,
+    nombre_estacion VARCHAR(100) NOT NULL,
+    estado VARCHAR(50)
+);
+
+-- Crear la tabla 'feriados'
+CREATE TABLE IF NOT EXISTS feriados (
+    id SERIAL PRIMARY KEY,
+    fecha DATE NOT NULL,
+    nombre VARCHAR(100),
+    irrenunciable BOOLEAN,
+    tipo VARCHAR(50),
+    leyes TEXT
+);
+
+-- Crear la tabla 'informacion_extraida'
+CREATE TABLE IF NOT EXISTS informacion_extraida (
+    id SERIAL PRIMARY KEY,
+    url TEXT,
+    ficha_informacion TEXT,
+    article_titulo TEXT
+);
+
+-- Crear la tabla 'museos_scraping'
+CREATE TABLE IF NOT EXISTS museos_scraping (
+    id SERIAL PRIMARY KEY,
+    museum_names VARCHAR(255),
+    museum_ratings NUMERIC,
+    museum_reviews NUMERIC
+);
+
+-- Instrucciones COPY para cargar los datos desde CSV, omitiendo la columna id
+
+COPY robos(lat, lon, robos) FROM '/home/nicolas/Desktop/U/proyecto_res/Amenazas/robos.csv' DELIMITER ',' CSV HEADER;
+COPY reportes_trafico(fecha, hora, descripcion, enlace) FROM '/home/nicolas/Desktop/U/proyecto_res/Amenazas/reportes_trafico.csv' DELIMITER ',' CSV HEADER;
+COPY estado_metro(nombre_estacion, estado) FROM '/home/nicolas/Desktop/U/proyecto_res/Amenazas/estado_metro.csv' DELIMITER ',' CSV HEADER;
+COPY feriados(nombre, fecha, irrenunciable, tipo, leyes) FROM '/home/nicolas/Desktop/U/proyecto_res/Amenazas/feriados_chile2024.csv' DELIMITER ',' CSV HEADER;
+COPY informacion_extraida(url, ficha_informacion, article_titulo) FROM '/home/nicolas/Desktop/U/proyecto_res/Metadata/informacion_extraida.csv' DELIMITER ',' CSV HEADER;
+COPY museos_scraping(museum_names, museum_ratings, museum_reviews) FROM '/home/nicolas/Desktop/U/proyecto_res/Metadata/museos_Scraping.csv' DELIMITER ',' CSV HEADER;

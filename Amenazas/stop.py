@@ -3,10 +3,10 @@ import json
 import csv
 from pyproj import Transformer
 import geojson
+from concurrent.futures import ThreadPoolExecutor
 
 # URL base del servicio WMS
 wms_url = "https://stop.carabineros.cl/geoserver/stop/wms"
-
 geojson_path = '../Metadata/museos.geojson'
 
 # Leer el archivo GeoJSON
@@ -54,7 +54,7 @@ def get_feature_info(point):
     })
     
     # Realizar la solicitud GET al servicio WMS
-    response = requests.get(wms_url, params=params)
+    response = requests.get(wms_url, params=params, verify=False)
     
     # Verificar si la respuesta es exitosa
     if response.status_code == 200:
@@ -68,33 +68,37 @@ def get_feature_info(point):
         print(f"Error en la solicitud para el punto {point['x']}, {point['y']}: {response.status_code}")
         return None
 
-# Escribir los resultados en un archivo CSV
+# Función para procesar cada feature y escribir en el CSV
+def process_feature(feature, writer):
+    geometry = feature['geometry']
+    coordinates = extract_coordinates(geometry)
+
+    if len(coordinates) > 0:
+        Latitud = float(coordinates[0][1])
+        Longitud = float(coordinates[0][0])
+
+        # Transformar las coordenadas de EPSG:4326 a EPSG:3857
+        NewLong, NewLat = transformer.transform(Latitud, Longitud)
+
+        buffer_x = -2293.11
+        buffer_y = -1117.89
+
+        point = {'x': 0, 'y': 0, 'bbox': [NewLong, NewLat, NewLong - buffer_x, NewLat - buffer_y]}
+    
+        feature_info = get_feature_info(point)
+
+        if feature_info and "features" in feature_info and len(feature_info["features"]) > 0:
+            robos = feature_info["features"][0]["properties"].get("robos", "0")
+            writer.writerow([Latitud, Longitud, robos])  # Sin json.dumps() para evitar comillas
+        elif feature_info and "totalFeatures" in feature_info and feature_info["totalFeatures"] == 'unknown':
+            writer.writerow([Latitud, Longitud, "0"])
+
+# Escribir los resultados en un archivo CSV usando paralelización
 with open('robos.csv', mode='w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(['Lat', 'Lon', 'Robos'])
 
-    for feature in gj['features']:
-        geometry = feature['geometry']
-        coordinates = extract_coordinates(geometry)
-
-        if len(coordinates) > 0:
-            Latitud = float(coordinates[0][1])
-            Longitud = float(coordinates[0][0])
-     
-
-            # Transformar las coordenadas de EPSG:4326 a EPSG:3857
-            NewLong, NewLat = transformer.transform(Latitud, Longitud)
-
-            buffer_x=-2293.11
-            buffer_y=-1117.89
-
-            point = {'x': 0, 'y': 0, 'bbox': [NewLong,NewLat,NewLong-buffer_x,NewLat-buffer_y]}
-        
-            feature_info = get_feature_info(point)
-
-            if feature_info and "features" in feature_info and len(feature_info["features"]) > 0:
-                robos = feature_info["features"][0]["properties"].get("robos", "N/A")
-                writer.writerow([Latitud, Longitud, json.dumps(robos)])
-            elif feature_info and "totalFeatures" in feature_info and feature_info["totalFeatures"] == 'unknown':
-                writer.writerow([Latitud, Longitud, "0"])
-
+    # Usar ThreadPoolExecutor para procesar las features en paralelo
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for feature in gj['features']:
+            executor.submit(process_feature, feature, writer)

@@ -1,9 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-import time
 import re
 import csv
+import concurrent.futures
+
+# Crear una sesión de requests para mejorar el rendimiento
+session = requests.Session()
+session.headers.update({'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'})
 
 def esta_permitido_por_robots(url):
     """
@@ -20,7 +24,7 @@ def extraer_informacion(url):
     """
     try:
         # Hacemos una solicitud GET a la URL
-        respuesta = requests.get(url)
+        respuesta = session.get(url)
         if respuesta.status_code != 200:
             return None
         
@@ -59,7 +63,7 @@ def obtener_enlaces(url, dominio_base):
     """
     try:
         # Hacemos una solicitud GET a la URL
-        respuesta = requests.get(url)
+        respuesta = session.get(url)
         if respuesta.status_code != 200:
             return []
         
@@ -88,32 +92,31 @@ def obtener_enlaces(url, dominio_base):
 
 def scrape_dominio_interno(url_inicial, profundidad=1):
     dominio_base = urlparse(url_inicial).netloc
-    
     visitados = set()  # URLs ya visitadas
     pendientes = {url_inicial}  # URLs pendientes de visitar
-    
     informacion_extraida = []  # Almacenar la información extraída de cada página
 
     for nivel in range(profundidad):
         nuevos_pendientes = set()
         print(f"\nProfundidad {nivel + 1}")
-        while pendientes:
-            url = pendientes.pop()
-            if url not in visitados:
-                print(f"Visitando: {url}")
-                visitados.add(url)
-                
-                # Extraemos la información de la página
-                info = extraer_informacion(url)
-                if info:
-                    informacion_extraida.append(info)  # Guardamos la información extraída si se encuentra
-                
-                # Obtenemos los enlaces dentro del mismo dominio
-                enlaces = obtener_enlaces(url, dominio_base)
-                nuevos_pendientes.update(enlaces)  # Añadimos nuevos enlaces para procesar
-            time.sleep(1)  # Retraso para no sobrecargar el servidor
-        
-        # Actualizamos los pendientes para el siguiente nivel de profundidad
+
+        # Procesar URLs en paralelo
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_url = {executor.submit(extraer_informacion, url): url for url in pendientes}
+            for future in concurrent.futures.as_completed(future_to_url):
+                url = future_to_url[future]
+                if url not in visitados:
+                    visitados.add(url)
+                    try:
+                        info = future.result()
+                        if info:
+                            informacion_extraida.append(info)
+                        
+                        enlaces = obtener_enlaces(url, dominio_base)
+                        nuevos_pendientes.update(enlaces)
+                    except Exception as e:
+                        print(f"Error en la URL {url}: {e}")
+
         pendientes = nuevos_pendientes
 
     return informacion_extraida
