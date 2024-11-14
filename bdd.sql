@@ -14,14 +14,6 @@ GRANT ALL PRIVILEGES ON DATABASE museos_db TO boris;
 GRANT ALL PRIVILEGES ON DATABASE monumentos_db TO boris;
 GRANT ALL PRIVILEGES ON DATABASE edges_sql TO boris;
 
--- Crear la tabla Edges_SQL en edges_sql si no existe
-CREATE TABLE IF NOT EXISTS Edges_SQL (
-    id SERIAL PRIMARY KEY,
-    source_id INT NOT NULL,
-    target_id INT NOT NULL,
-    weight FLOAT,
-    description TEXT
-);
 
 -- Crear la base de datos 'metadatos'
 CREATE DATABASE metadatos OWNER boris;
@@ -29,6 +21,22 @@ GRANT ALL PRIVILEGES ON DATABASE metadatos TO boris;
 
 -- Conectarse a la base de datos 'metadatos' para crear las tablas
 \c metadatos
+
+CREATE TABLE IF NOT EXISTS edges_sql (
+    id SERIAL PRIMARY KEY,
+    source INT NOT NULL,           -- Nodo de inicio
+    target INT NOT NULL,           -- Nodo de fin
+    cost FLOAT,                    -- Peso (distancia) en la dirección source -> target
+    reverse_cost FLOAT,            -- Peso en la dirección opuesta, o un valor alto si es unidireccional
+    description TEXT               -- Descripción opcional
+);
+
+CREATE TABLE IF NOT EXISTS nodes (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    lat FLOAT,
+    lon FLOAT
+);
 
 -- Crear la tabla 'robos'
 CREATE TABLE IF NOT EXISTS robos (
@@ -77,7 +85,7 @@ CREATE TABLE IF NOT EXISTS museos_scraping (
     id SERIAL PRIMARY KEY,
     museum_names VARCHAR(255),
     museum_ratings NUMERIC,
-    museum_reviews NUMERIC
+    museum_reviews FLOAT
 );
 
 -- Instrucciones COPY para cargar los datos desde CSV, omitiendo la columna id

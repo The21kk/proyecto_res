@@ -51,10 +51,9 @@ def get_museums_ratings_reviews_from_page(soup):
     for review_span in soup.find_all('span', class_='biGQs _P pZUbB osNWb'):
         if review_span:
             review_text = review_span.text.strip()
-            review_text = review_text.replace(".", "").replace(",", "")  # Eliminar puntos y comas
+            review_text = re.sub(r'[^\d]', '', review_text)  # Eliminar cualquier carácter que no sea un número
             try:
-                # Convertir a entero después de eliminar el punto y coma
-                reviews.append(int(review_text))
+                reviews.append(int(review_text))  # Convertir a entero
             except ValueError:
                 reviews.append(None)  # Si no es un número válido, agregar None
         else:

@@ -47,24 +47,332 @@
             <!-- Filtros de Atributos Booleanos -->
             <label><input type="checkbox" id="arteFilter" onchange="filterByMetadata()"> Arte</label>
             <label><input type="checkbox" id="historiaFilter" onchange="filterByMetadata()"> Historia</label>
+            <label><input type="checkbox" id="arqFilter" onchange="filterByMetadata()"> Arquitectura</label>
+            <label><input type="checkbox" id="etnoFilter" onchange="filterByMetadata()"> Etnografía</label>
+            <label><input type="checkbox" id="histNatFilter" onchange="filterByMetadata()"> Historia Natural</label>
+            <label><input type="checkbox" id="paleoFilter" onchange="filterByMetadata()"> Paleontología</label>
             <label><input type="checkbox" id="cobroFilter" onchange="filterByMetadata()"> Entrada Gratuita</label>
         </fieldset>
+        <fieldset>
+    		<legend>Mostrar Información Adicional</legend>
+    		<label><input type="checkbox" id="showMuseos" onchange="toggleDataLayer('museos')"> Museos</label>
+    		<label><input type="checkbox" id="showRobos" onchange="toggleDataLayer('robos')"> Robos</label>
+    		<label><input type="checkbox" id="showReportes" onchange="toggleDataLayer('reportes_trafico')"> Reportes de Tráfico</label>
+    		<label><input type="checkbox" id="showMetro" onchange="toggleDataLayer('estado_metro')"> Estado del Metro</label>
+    		<label><input type="checkbox" id="showFeriados" onchange="toggleDataLayer('feriados')"> Feriados</label>
+    		<label><input type="checkbox" id="showInfoExtra" onchange="toggleDataLayer('informacion_extraida')"> Información Extra</label>
+	</fieldset>
+	<fieldset>
+    <legend>Mostrar Información de Fallos y Probabilidades</legend>
+    <label><input type="checkbox" id="showFailProbability" onchange="toggleDataLayer('failProbability')"> Probabilidad de Fallo</label>
+    <label><input type="checkbox" id="showEventSimulation" onchange="toggleDataLayer('eventSimulation')"> Simulación de Eventos</label>
+</fieldset>
+
+
+        
 
         <button onclick="calculateRoute()">Calcular Ruta</button>
     </div>
-    <div id="map"></div>
+<div id="map"></div>
+<div id="info-panel" style="padding: 10px; border-top: 1px solid #ccc; display: none;">
+    <h3>Información de Datos Seleccionados</h3>
+    <div id="info-content"></div>
+</div>
+
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-pip@1.1.0/leaflet-pip.min.js"></script>
     <script>
         const map = L.map('map').setView([-33.4489, -70.6693], 13); // Santiago de Chile
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
+
         let startMarker, endMarker;
+        let userMarker; // Agrega una variable para el marcador de la ubicación del usuario
         let comunaLayer; // Capa para todas las comunas
         const startSelect = document.getElementById('startPoint');
         const endSelect = document.getElementById('endPoint');
         const points = {}; // Almacena los puntos de cada capa por nombre
         const pointLayers = []; // Almacena las capas de puntos de interés para manipularlas
+
+	const dataLayers = {}; // Almacena las capas de datos activas
+	
+	
+function toggleDataLayer(layerName) {
+    if (dataLayers[layerName]) {
+        // Si la capa está activa, remuévela del mapa y limpia el panel
+        map.removeLayer(dataLayers[layerName]);
+        delete dataLayers[layerName];
+        updateInfoPanel([]); // Limpia el panel al desactivar la capa
+    } else {
+        // Si la capa no está activa, carga y muestra los datos
+        loadDataLayer(layerName);
+    }
+}
+
+
+
+
+
+
+function updateInfoPanel(data) {
+    console.log(`Updating info panel with ${data.length} items`);
+
+    const infoPanel = document.getElementById('info-panel');
+    const infoContent = document.getElementById('info-content');
+
+    // Calcular el rango de elementos a mostrar para la página actual
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const itemsToDisplay = data.slice(startIndex, endIndex);
+
+    infoContent.innerHTML = ''; // Limpia el contenido antes de agregar nuevos datos
+
+    if (itemsToDisplay.length === 0) {
+        infoPanel.style.display = 'none';
+    } else {
+        const content = itemsToDisplay.map(item => {
+            if (item.fecha && item.nombre && item.tipo) {
+                // Formato para Feriados
+                return `
+                    <div>
+                        <strong>Feriado: ${item.nombre}</strong><br>
+                        Fecha: ${new Date(item.fecha).toLocaleDateString()}<br>
+                        Tipo: ${item.tipo}<br>
+                        Irrenunciable: ${item.irrenunciable ? 'Sí' : 'No'}<br>
+                        Leyes: ${item.leyes || 'No especificado'}
+                    </div>
+                    <hr>`;
+            } else if (item.nombre_estacion && item.estado) {
+                // Formato para Estado del Metro
+                return `
+                    <div>
+                        <strong>Estación de Metro: ${item.nombre_estacion}</strong><br>
+                        Estado: ${item.estado}
+                    </div>
+                    <hr>`;
+            } else if (item.museum_names && item.museum_ratings && item.museum_reviews) {
+                // Formato para Museos
+                return `
+                    <div>
+                        <strong>Museo: ${item.museum_names}</strong><br>
+                        Calificación: ${item.museum_ratings}<br>
+                        Reseñas: ${item.museum_reviews}
+                    </div>
+                    <hr>`;
+            } else if (item.descripcion && item.fecha) {
+                // Formato para Reportes de Tráfico
+                return `
+                    <div>
+                        <strong>Reporte de Tráfico</strong><br>
+                        Fecha: ${new Date(item.fecha).toLocaleDateString()}<br>
+                        Descripción: ${item.descripcion}
+                    </div>
+                    <hr>`;
+            } else if (item.robos !== undefined && item.lat && item.lon) {
+                // Formato para Robos
+                return `
+                    <div>
+                        <strong>Reporte de Robo</strong><br>
+                        Robos reportados: ${item.robos}
+                    </div>
+                    <hr>`;
+            } else {
+                // Para cualquier otro tipo de dato
+                return `<div><strong>${JSON.stringify(item)}</strong></div><hr>`;
+            }
+        }).join('');
+
+        infoContent.innerHTML = content;
+
+        // Controles de paginación
+        const paginationControls = `
+            <div style="margin-top: 10px;">
+                <button onclick="changePage(-1)" ${currentPage === 1 ? 'disabled' : ''}>Anterior</button>
+                <span>Página ${currentPage} de ${Math.ceil(data.length / itemsPerPage)}</span>
+                <button onclick="changePage(1)" ${endIndex >= data.length ? 'disabled' : ''}>Siguiente</button>
+            </div>
+        `;
+        infoContent.innerHTML += paginationControls;
+
+        infoPanel.style.display = 'block';
+    }
+}
+
+
+function changePage(direction) {
+    currentPage += direction;
+    updateInfoPanel(currentData); // Usa `currentData` para mantener la referencia a los datos actuales
+}
+
+
+// Función para cargar y mostrar la probabilidad de fallo
+async function toggleFailureProbability() {
+    const isChecked = document.getElementById('showFailureProbability').checked;
+    if (isChecked) {
+        const response = await fetch('/api/failureProbability');
+        const failureData = await response.json();
+        displayInfo(failureData, "Probabilidad de Fallo entre Conexiones");
+    } else {
+        clearInfo();
+    }
+}
+
+// Función para cargar y mostrar la simulación de eventos
+async function toggleEventSimulation() {
+    const isChecked = document.getElementById('showEventSimulation').checked;
+    if (isChecked) {
+        const response = await fetch('/api/eventSimulation');
+        const eventData = await response.json();
+        displayInfo(eventData, "Simulación de Fallos en Conexiones");
+    } else {
+        clearInfo();
+    }
+}
+
+// Función para mostrar los datos en el panel de información
+function displayInfo(data, title) {
+    const infoPanel = document.getElementById('info-panel');
+    const infoContent = document.getElementById('info-content');
+    
+    infoContent.innerHTML = `<h4>${title}</h4>`;
+    infoContent.innerHTML += data.map(item => `<div>Desde: ${item.from} - Hacia: ${item.to} - ${item.falla !== undefined ? 'Falla' : 'Probabilidad'}: ${item.falla !== undefined ? (item.falla ? 'Sí' : 'No') : item.failureProbability}</div>`).join('');
+    
+    infoPanel.style.display = 'block';
+}
+
+function clearInfo() {
+    const infoPanel = document.getElementById('info-panel');
+    const infoContent = document.getElementById('info-content');
+    infoContent.innerHTML = '';
+    infoPanel.style.display = 'none';
+}
+
+
+
+
+let currentPage = 1;
+const itemsPerPage = 20; // Número de elementos por página, ajustable
+let currentData = []; // Almacena los datos actuales para la paginación
+
+async function loadDataLayer(layerName) {
+    // Establece la URL según el tipo de capa, usando archivos específicos para `failProbability` y `eventSimulation`
+    let url;
+    if (layerName === 'failProbability') {
+        url = '/api/failureProbability';
+    } else if (layerName === 'eventSimulation') {
+        url = '/api/eventSimulation';
+    } else {
+        url = `/api/${layerName}`;
+    }
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // Almacena los datos en `currentData` y establece la página en 1
+        currentData = data;
+        currentPage = 1;
+
+        // Verifica si los datos tienen `lat` y `lon` para mostrarlos en el mapa
+        if (data[0] && data[0].lat !== undefined && data[0].lon !== undefined) {
+            let layer;
+            switch (layerName) {
+                case 'museos':
+                    layer = L.layerGroup(data.map(museum => {
+                        const { museum_names, museum_ratings, museum_reviews, lat, long } = museum;
+                        const popupContent = `
+                            <strong>${museum_names}</strong><br>
+                            Rating: ${museum_ratings}<br>
+                            Reviews: ${museum_reviews}
+                        `;
+                        return L.marker([lat, long]).bindPopup(popupContent);
+                    }));
+                    break;
+                case 'robos':
+                    layer = L.layerGroup(data.map(rob => {
+                        const { lat, lon, robos } = rob;
+                        return L.circleMarker([lat, lon], { color: 'red' }).bindPopup(`Robos reportados: ${robos}`);
+                    }));
+                    break;
+                case 'reportes_trafico':
+                    layer = L.layerGroup(data.map(reporte => {
+                        const { lat, lon, fecha, descripcion } = reporte;
+                        return L.marker([lat, lon], { color: 'orange' }).bindPopup(`
+                            <strong>Reporte de Tráfico</strong><br>
+                            Fecha: ${fecha}<br>
+                            Descripción: ${descripcion}
+                        `);
+                    }));
+                    break;
+                case 'estado_metro':
+                    layer = L.layerGroup(data.map(estacion => {
+                        const { nombre_estacion, estado, lat, lon } = estacion;
+                        return L.marker([lat, lon], { color: 'green' }).bindPopup(`
+                            <strong>${nombre_estacion}</strong><br>
+                            Estado: ${estado}
+                        `);
+                    }));
+                    break;
+                case 'feriados':
+                    layer = L.layerGroup(data.map(feriado => {
+                        const { fecha, nombre, irrenunciable, tipo, leyes, lat, lon } = feriado;
+                        return L.marker([lat, lon], { color: 'blue' }).bindPopup(`
+                            <strong>${nombre}</strong><br>
+                            Fecha: ${fecha}<br>
+                            Tipo: ${tipo}<br>
+                            Irrenunciable: ${irrenunciable ? 'Sí' : 'No'}<br>
+                            Leyes: ${leyes}
+                        `);
+                    }));
+                    break;
+                case 'informacion_extraida':
+                    layer = L.layerGroup(data.map(info => {
+                        const { url, ficha_informacion, article_titulo, lat, lon } = info;
+                        return L.marker([lat, lon], { color: 'purple' }).bindPopup(`
+                            <strong>${article_titulo}</strong><br>
+                            Ficha: ${ficha_informacion}<br>
+                            <a href="${url}" target="_blank">Ver más</a>
+                        `);
+                    }));
+                    break;
+            }
+
+            dataLayers[layerName] = layer;
+            layer.addTo(map);
+            document.getElementById('info-panel').style.display = 'none'; // Oculta el panel si se muestran en el mapa
+
+        } else {
+            // Si los datos no tienen `lat` y `lon`, los mostramos en el panel de información
+            if (layerName === 'failProbability' || layerName === 'eventSimulation') {
+                // Formatear y mostrar datos específicos para `failProbability` y `eventSimulation`
+                const formattedData = data.map(item => `
+                    <div style="margin-bottom: 8px; padding: 5px; border-bottom: 1px solid #ddd;">
+                        <strong>Desde:</strong> ${item.from} <br>
+                        <strong>Hacia:</strong> ${item.to} <br>
+                        <strong>${item.falla !== undefined ? 'Falla' : 'Probabilidad de Falla'}:</strong> ${item.falla !== undefined ? (item.falla ? 'Sí' : 'No') : (item.failureProbability * 100).toFixed(2) + '%'}
+                    </div>
+                `).join('');
+                document.getElementById('info-content').innerHTML = formattedData;
+                document.getElementById('info-panel').style.display = 'block';
+            } else {
+                // Si es otro tipo de dato sin coordenadas, mostrar la primera página de datos
+                updateInfoPanel(currentData);
+            }
+        }
+
+    } catch (error) {
+        console.error(`Error al cargar la capa ${layerName}:`, error);
+    }
+}
+
+
+
+
+
+
+
+
+	
 
         // Función para agregar los puntos a los selectores
         function addPointToSelector(name, latlng) {
@@ -177,11 +485,18 @@
                         const userLng = position.coords.longitude;
                         const userLocation = L.latLng(userLat, userLng);
 
-                        // Agrega la ubicación del usuario al selector de inicio
+                        // Agrega la ubicación del usuario al selector de inicio y final como "Ubicación Actual"
                         addPointToSelector("Ubicación Actual", userLocation);
-                        map.setView(userLocation, 13);
+                        map.setView(userLocation, 13); // Centra el mapa en la ubicación del usuario
 
-                        startSelect.value = "Ubicación Actual";
+                        // Verifica si el marcador ya existe para evitar duplicados
+                        if (userMarker) userMarker.remove();
+
+                        // Agrega un marcador para la ubicación actual en el mapa
+                        userMarker = L.marker(userLocation).addTo(map)
+                            .bindPopup("Ubicación Actual")
+                            .openPopup();
+
                     },
                     () => {
                         document.getElementById("manualAddress").style.display = "block";
@@ -200,11 +515,19 @@
             const tipoInst = document.getElementById("tipoInstSelect").value;
             const arteFilter = document.getElementById("arteFilter").checked;
             const historiaFilter = document.getElementById("historiaFilter").checked;
+            const arqFilter = document.getElementById("arqFilter").checked;
+            const etnoFilter = document.getElementById("etnoFilter").checked;
+            const histNatFilter = document.getElementById("histNatFilter").checked;
+            const paleoFilter = document.getElementById("paleoFilter").checked;
             const cobroFilter = document.getElementById("cobroFilter").checked;
 
             if (tipoInst && properties.tipo_inst !== tipoInst) return false;
             if (arteFilter && properties.arte !== "Sí") return false;
             if (historiaFilter && properties.historia !== "Sí") return false;
+            if (arqFilter && properties.arq !== "Sí") return false;
+            if (etnoFilter && properties.etno !== "Sí") return false;
+            if (histNatFilter && properties.hist_nat !== "Sí") return false;
+            if (paleoFilter && properties.paleo !== "Sí") return false;
             if (cobroFilter && properties.cobro_ent !== "Ingreso gratuito") return false;
 
             return true;
