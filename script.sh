@@ -9,9 +9,9 @@ METADATA_DIR="$BASE_DIR/Metadata"
 INFRAESTRUCTURA_DIR="$BASE_DIR/Infraestructura"
 BD_SCRIPT="$BASE_DIR/bdd.sql"
 
-# Ejecutar scripts en la carpeta 'amenazas'
+# Ejecutar scripts en la carpeta 'Amenazas'
 if [ -d "$AMENAZAS_DIR" ]; then
-    echo "Ejecutando scripts en la carpeta 'amenazas'..."
+    echo "Ejecutando scripts en la carpeta 'Amenazas'..."
     cd "$AMENAZAS_DIR" || exit
 
     for script in feriados_setup.sh metro_setup.sh stop_setup.sh trafico_setup.sh; do
@@ -23,7 +23,7 @@ if [ -d "$AMENAZAS_DIR" ]; then
         fi
     done
 else
-    echo "La carpeta 'amenazas' no existe en $BASE_DIR."
+    echo "La carpeta 'Amenazas' no existe en $BASE_DIR."
 fi
 
 # Ejecutar scripts en la carpeta 'Metadata'
@@ -39,13 +39,25 @@ if [ -d "$METADATA_DIR" ]; then
             echo "El script $script no se encontró en $METADATA_DIR."
         fi
     done
+
+    # Ejecutar opa.py después de los scripts de 'Metadata'
+    if [ -f "opa.py" ]; then
+        echo "Ejecutando opa.py..."
+        python3 opa.py
+        if [ $? -ne 0 ]; then
+            echo "Error al ejecutar opa.py."
+            exit 1
+        fi
+    else
+        echo "El archivo opa.py no se encontró en $METADATA_DIR."
+    fi
 else
     echo "La carpeta 'Metadata' no existe en $BASE_DIR."
 fi
 
-# Ejecutar scripts en la carpeta 'infraestructura'
+# Ejecutar scripts en la carpeta 'Infraestructura'
 if [ -d "$INFRAESTRUCTURA_DIR" ]; then
-    echo "Ejecutando scripts en la carpeta 'infraestructura'..."
+    echo "Ejecutando scripts en la carpeta 'Infraestructura'..."
     cd "$INFRAESTRUCTURA_DIR" || exit
 
     for script in cargar_monumentos.sh cargar_museos.sh; do
@@ -57,7 +69,7 @@ if [ -d "$INFRAESTRUCTURA_DIR" ]; then
         fi
     done
 else
-    echo "La carpeta 'infraestructura' no existe en $BASE_DIR."
+    echo "La carpeta 'Infraestructura' no existe en $BASE_DIR."
 fi
 
 # Ejecutar el script SQL para inicializar la base de datos
@@ -66,6 +78,18 @@ if [ -f "$BD_SCRIPT" ]; then
     psql -U boris -d edges_sql -f "$BD_SCRIPT"
 else
     echo "El archivo bdd.sql no se encontró en $BASE_DIR."
+fi
+
+# Ejecutar prob_ame.py en la raíz del proyecto
+if [ -f "$BASE_DIR/prob_ame.py" ]; then
+    echo "Ejecutando prob_ame.py..."
+    python3 "$BASE_DIR/prob_ame.py"
+    if [ $? -ne 0 ]; then
+        echo "Error al ejecutar prob_ame.py."
+        exit 1
+    fi
+else
+    echo "El archivo prob_ame.py no se encontró en $BASE_DIR."
 fi
 
 echo "Ejecución de scripts finalizada."

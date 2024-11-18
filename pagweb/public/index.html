@@ -62,11 +62,84 @@
     		<label><input type="checkbox" id="showFeriados" onchange="toggleDataLayer('feriados')"> Feriados</label>
     		<label><input type="checkbox" id="showInfoExtra" onchange="toggleDataLayer('informacion_extraida')"> Información Extra</label>
 	</fieldset>
-	<fieldset>
+<fieldset>
     <legend>Mostrar Información de Fallos y Probabilidades</legend>
     <label><input type="checkbox" id="showFailProbability" onchange="toggleDataLayer('failProbability')"> Probabilidad de Fallo</label>
     <label><input type="checkbox" id="showEventSimulation" onchange="toggleDataLayer('eventSimulation')"> Simulación de Eventos</label>
+    <label><input type="checkbox" id="showThreatProbability" onchange="toggleDataLayer('threatProbability')"> Probabilidad de Amenazas</label>
 </fieldset>
+
+<button id="simularFallas">Simular Fallas</button>
+<div id="resultados"></div>
+
+<script>
+    document.getElementById('simularFallas').addEventListener('click', () => {
+        const startName = document.getElementById('startPoint').value; // Valor del nodo de inicio
+        const endName = document.getElementById('endPoint').value; // Valor del nodo de fin
+
+        if (!startName || !endName) {
+            alert('Por favor selecciona puntos de inicio y fin válidos.');
+            return;
+        }
+
+        fetch(`/simular-fallas?inicio=${encodeURIComponent(startName)}&fin=${encodeURIComponent(endName)}`)
+            .then((response) => response.json())
+            .then((data) => {
+                const resultadosDiv = document.getElementById('resultados');
+                resultadosDiv.innerHTML = ''; // Limpiar resultados previos
+
+                // Mostrar resultados solo de inicio y fin
+                if (data.length === 0) {
+                    resultadosDiv.textContent = 'No se encontraron nodos para el inicio y fin seleccionados.';
+                } else {
+                    data.forEach((nodo) => {
+                        const resultado = document.createElement('div');
+                        resultado.textContent = `Nodo: ${nodo.nodo_id}, Falla: ${nodo.falla ? 'Sí' : 'No'}`;
+                        resultadosDiv.appendChild(resultado);
+                    });
+                }
+            })
+            .catch((error) => {
+                console.error('Error al simular fallas:', error);
+            });
+    });
+    document.getElementById('mostrarProbabilidades').addEventListener('click', () => {
+    const startName = document.getElementById('startPoint').value; // Punto de inicio
+    const endName = document.getElementById('endPoint').value; // Punto final
+
+    if (!startName || !endName) {
+        alert('Por favor selecciona puntos de inicio y fin válidos.');
+        return;
+    }
+
+    fetch(`/api/probabilidades-amenazas?inicio=${encodeURIComponent(startName)}&fin=${encodeURIComponent(endName)}`)
+        .then((response) => response.json())
+        .then((data) => {
+            const resultadosDiv = document.getElementById('resultadosAmenazas');
+            resultadosDiv.innerHTML = ''; // Limpiar resultados previos
+
+            if (data.length === 0) {
+                resultadosDiv.textContent = 'No se encontraron datos de probabilidades para los nodos seleccionados.';
+            } else {
+                data.forEach((nodo) => {
+                    const resultado = document.createElement('div');
+                    resultado.innerHTML = `
+                        <strong>Nodo:</strong> ${nodo.nodo}<br>
+                        <strong>Amenaza:</strong> ${nodo.amenaza}<br>
+                        <strong>Probabilidad:</strong> ${(nodo.probabilidad * 100).toFixed(2)}%
+                    `;
+                    resultadosDiv.appendChild(resultado);
+                });
+            }
+        })
+        .catch((error) => {
+            console.error('Error al cargar las probabilidades de amenazas:', error);
+        });
+});
+
+</script>
+
+
 
 
         
@@ -108,10 +181,6 @@ function toggleDataLayer(layerName) {
         loadDataLayer(layerName);
     }
 }
-
-
-
-
 
 
 function updateInfoPanel(data) {
@@ -176,6 +245,23 @@ function updateInfoPanel(data) {
                         Robos reportados: ${item.robos}
                     </div>
                     <hr>`;
+            } else if (item.article_titulo && item.ficha_informacion) {
+                // Formato para Información Extra
+                return `
+                    <div>
+                        <strong>Título:</strong> ${item.article_titulo}<br>
+                        <strong>Ficha:</strong> ${item.ficha_informacion}<br>
+                        <a href="${item.url}" target="_blank">Ver más</a>
+                    </div>
+                    <hr>`;
+            } else if (item.amenaza && item.probabilidad) {
+                // Formato para Probabilidades de Amenazas
+                return `
+                    <div>
+                        <strong>Amenaza:</strong> ${item.amenaza}<br>
+                        <strong>Probabilidad:</strong> ${(item.probabilidad * 100).toFixed(2)}%
+                    </div>
+                    <hr>`;
             } else {
                 // Para cualquier otro tipo de dato
                 return `<div><strong>${JSON.stringify(item)}</strong></div><hr>`;
@@ -199,9 +285,46 @@ function updateInfoPanel(data) {
 }
 
 
+
+
 function changePage(direction) {
     currentPage += direction;
     updateInfoPanel(currentData); // Usa `currentData` para mantener la referencia a los datos actuales
+}
+function toggleThreatProbability() {
+    const checkbox = document.getElementById("showThreatProbability");
+    const startPoint = document.getElementById("startPoint").value;
+    const endPoint = document.getElementById("endPoint").value;
+
+    if (!startPoint || !endPoint) {
+        alert("Por favor selecciona puntos de inicio y fin.");
+        checkbox.checked = false; // Desactiva el checkbox
+        return;
+    }
+
+    if (checkbox.checked) {
+        // Hacer la solicitud al backend
+        fetch(`/api/probabilidades-amenazas?inicio=${encodeURIComponent(startPoint)}&fin=${encodeURIComponent(endPoint)}`)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.length === 0) {
+                    alert("No se encontraron probabilidades de amenazas para los puntos seleccionados.");
+                    checkbox.checked = false; // Desactiva el checkbox si no hay datos
+                    return;
+                }
+
+                // Mostrar los resultados en el panel de información
+                updateInfoPanel(data);
+            })
+            .catch((error) => {
+                console.error("Error al obtener probabilidades de amenazas:", error);
+                alert("Error al cargar las probabilidades de amenazas.");
+                checkbox.checked = false; // Desactiva el checkbox si hay un error
+            });
+    } else {
+        // Limpiar el panel de información si se desactiva el checkbox
+        updateInfoPanel([]);
+    }
 }
 
 
@@ -363,16 +486,7 @@ async function loadDataLayer(layerName) {
     } catch (error) {
         console.error(`Error al cargar la capa ${layerName}:`, error);
     }
-}
-
-
-
-
-
-
-
-
-	
+}	
 
         // Función para agregar los puntos a los selectores
         function addPointToSelector(name, latlng) {
@@ -431,46 +545,42 @@ async function loadDataLayer(layerName) {
         }
 
         // Cargar puntos desde una capa y ajustar para soportar MultiPoint
-        function loadPoints(url, color, type, selectedLayer = null) {
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    const layer = L.geoJSON(data, {
-                        pointToLayer: function (feature, latlng) {
-                            // Aplicar filtros de metadata
-                            if (!passesMetadataFilters(feature.properties)) return null;
-
-                            // Si la geometría es MultiPoint, extraer el primer punto
-                            const geometry = feature.geometry;
-                            if (geometry.type === "MultiPoint" && geometry.coordinates.length > 0) {
-                                const [lng, lat] = geometry.coordinates[0];
-                                latlng = L.latLng(lat, lng);
-                            }
-
-                            // Si hay una comuna seleccionada, verificar si el punto está dentro
-                            if (selectedLayer) {
-                                const isWithin = leafletPip.pointInLayer([latlng.lng, latlng.lat], selectedLayer);
-                                if (isWithin.length === 0) return null;
-                            }
-
-                            // Agregar punto de interés y marcar en el selector
-                            if (feature.properties && feature.properties.nombre) {
-                                addPointToSelector(feature.properties.nombre, latlng);
-                            }
-                            return L.circleMarker(latlng, {
-                                radius: 8,
-                                color: color,
-                                fillColor: color,
-                                fillOpacity: 0.5
-                            }).on('click', () => selectPoint(feature.properties.nombre, type));
+function loadPoints(url, color, type, selectedLayer = null) {
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const layer = L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    // Filtrar según la URL (capa1 o capa2)
+                    if (url.includes('capa1')) {
+                        // Solo museos (capa1) se agregan a las listas
+                        if (feature.properties && feature.properties.nombre) {
+                            addPointToSelector(feature.properties.nombre, latlng);
                         }
-                    }).addTo(map);
+                    }
 
-                    // Agregar capa de puntos a la lista de capas
-                    pointLayers.push(layer);
-                })
-                .catch(error => console.error(`Error al cargar puntos de ${url}:`, error));
-        }
+                    // Si hay una comuna seleccionada, verificar si el punto está dentro
+                    if (selectedLayer) {
+                        const isWithin = leafletPip.pointInLayer([latlng.lng, latlng.lat], selectedLayer);
+                        if (isWithin.length === 0) return null;
+                    }
+
+                    // Agregar punto al mapa
+                    return L.circleMarker(latlng, {
+                        radius: 8,
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.5
+                    }).on('click', () => selectPoint(feature.properties.nombre, type));
+                }
+            }).addTo(map);
+
+            // Agregar capa de puntos a la lista de capas
+            pointLayers.push(layer);
+        })
+        .catch(error => console.error(`Error al cargar puntos de ${url}:`, error));
+}
+
 
         // Cargar todos los puntos al inicio
         loadPoints('/capa1', 'blue', 'start'); // Museos
